@@ -243,12 +243,25 @@ function showLogin(msg){
     document.getElementById("au-go").disabled=true;
     const {error}=await db.auth.signInWithPassword({email,password:pass});
     document.getElementById("au-go").disabled=false;
-    if(error){setAuthMsg("E-mail ou senha inválidos.","err");return;}
+    if(error){setAuthMsg(mensagemErroLogin(error),"err");return;}
   };
   document.getElementById("au-go").onclick=go;
   document.getElementById("au-pass").onkeydown=e=>{if(e.key==="Enter")go();};
 }
 function setAuthMsg(text,type){document.getElementById("authMsg").innerHTML=`<div class="auth-msg ${type}">${text}</div>`;}
+/* Traduz os erros mais comuns do Supabase Auth para uma mensagem que explica o que fazer,
+   em vez de sempre dizer "e-mail ou senha inválidos" (o que escondia, por exemplo, o caso
+   de um usuário criado pelo admin mas ainda pendente de confirmação de e-mail). */
+function mensagemErroLogin(error){
+  const m=(error&&error.message)||"";
+  if(/email not confirmed/i.test(m))
+    return "Este e-mail ainda não foi confirmado. Peça ao administrador para confirmar o acesso (painel Supabase → SQL Editor, ou desligar \"Confirm email\" em Authentication → Providers → Email).";
+  if(/invalid login credentials/i.test(m))
+    return "E-mail ou senha incorretos.";
+  if(/rate limit/i.test(m))
+    return "Muitas tentativas seguidas. Aguarde um minuto e tente novamente.";
+  return "Não foi possível entrar: "+(m||"erro desconhecido")+".";
+}
 
 /* ---------------- Montagem do app ---------------- */
 async function mountApp(){
