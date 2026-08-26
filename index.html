@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Controle Financeiro</title>
+
+<!-- ============================================================
+     CONFIGURAÇÃO — cole aqui os dois valores do seu projeto Supabase
+     (painel do Supabase > Project Settings > Data API / API Keys)
+     ============================================================ -->
+<script>
+  const SUPABASE_URL      = "https://wxdrkekfeupldmxfduzt.supabase.co/rest/v1/";   // ex.: https://abcdefgh.supabase.co
+  const SUPABASE_ANON_KEY = "sb_publishable_FXE_VnoZFIZebUUS6GKzeA_6d5Ryoud";        // a chave "anon" / "publishable" (pública, pode expor)
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<style>
+  :root{
+    --bg:#f4f6f8; --card:#fff; --border:#e3e8ee; --text:#1f2d3d; --muted:#6b7a8d;
+    --fazenda:#2e9e5b; --construcao:#e8871e; --moradia:#3a7bd5; --faturamento:#10a5a5;
+    --danger:#d0422e; --shadow:0 1px 3px rgba(20,40,60,.08),0 1px 2px rgba(20,40,60,.06);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:var(--text)}
+  #app{max-width:1080px;margin:0 auto;padding:18px 16px 60px;min-height:100vh}
+  .loading{text-align:center;padding:60px;color:var(--muted)}
+  h1{font-size:22px;margin:0 0 4px;font-weight:700}
+  .subtitle{color:var(--muted);font-size:13px;margin-bottom:18px}
+
+  /* Barra superior (usuário + ações) */
+  .topbar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+  .topbar .who{font-size:13px;color:var(--muted)}
+  .topbar .who b{color:var(--text)}
+  .topbar .actions{display:flex;gap:8px;flex-wrap:wrap}
+  .btn{padding:8px 14px;border:none;border-radius:8px;background:#2d3e50;color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:opacity .15s}
+  .btn:hover{opacity:.9}
+  .btn.ghost{background:#fff;border:1px solid var(--border);color:var(--text)}
+  .btn.accent-fazenda{background:var(--fazenda)} .btn.accent-construcao{background:var(--construcao)}
+  .btn.accent-moradia{background:var(--moradia)} .btn.accent-faturamento{background:var(--faturamento)}
+
+  /* Abas */
+  .tabs{display:flex;gap:4px;flex-wrap:wrap;background:var(--card);padding:5px;border-radius:12px;box-shadow:var(--shadow);margin-bottom:20px}
+  .tab{flex:1;min-width:105px;text-align:center;padding:10px 8px;border:none;background:transparent;border-radius:8px;font-size:14px;font-weight:600;color:var(--muted);cursor:pointer;transition:all .15s}
+  .tab:hover{background:var(--bg)}
+  .tab.active{color:#fff}
+  .tab.active[data-tab="resumo"]{background:#2d3e50}
+  .tab.active[data-tab="fazenda"]{background:var(--fazenda)}
+  .tab.active[data-tab="construcao"]{background:var(--construcao)}
+  .tab.active[data-tab="moradia"]{background:var(--moradia)}
+  .tab.active[data-tab="faturamento"]{background:var(--faturamento)}
+
+  .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:16px;box-shadow:var(--shadow)}
+  .card h2{font-size:16px;margin:0 0 14px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+  .field{display:flex;flex-direction:column;gap:4px;flex:1;min-width:120px}
+  .field label{font-size:12px;color:var(--muted);font-weight:600}
+  input,select{padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:#fff;color:var(--text);font-family:inherit}
+  input:focus,select:focus{outline:2px solid #cbd6e2;border-color:transparent}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--border)}
+  th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.3px}
+  td.amount,th.amount{text-align:right;font-variant-numeric:tabular-nums}
+  .del{color:var(--danger);cursor:pointer;background:none;border:none;font-size:13px}
+  .empty{color:var(--muted);text-align:center;padding:24px;font-size:14px}
+  .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
+  .stat{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;box-shadow:var(--shadow)}
+  .stat .label{font-size:12px;color:var(--muted);font-weight:600;margin-bottom:6px}
+  .stat .value{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+  .stat .value.pos{color:var(--fazenda)} .stat .value.neg{color:var(--danger)}
+  .filterbar{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
+  .filterbar select{min-width:110px}
+  .chart-wrap{position:relative;height:320px}
+  .note{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.5}
+  .total-line{display:flex;justify-content:space-between;padding:12px 8px;font-weight:700;font-size:15px;border-top:2px solid var(--border)}
+
+  /* Tela de login */
+  .auth-wrap{max-width:380px;margin:52px auto}
+  .auth-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:28px;box-shadow:var(--shadow)}
+  .auth-card h1{text-align:center;margin-bottom:6px}
+  .auth-card p.sub{text-align:center;color:var(--muted);font-size:13px;margin:0 0 22px}
+  .auth-card .field{margin-bottom:14px}
+  .auth-card .btn{width:100%;padding:11px;font-size:15px;margin-top:4px}
+  .auth-toggle{text-align:center;margin-top:16px;font-size:13px;color:var(--muted)}
+  .auth-toggle a{color:var(--moradia);cursor:pointer;font-weight:600}
+  .auth-msg{font-size:13px;padding:10px;border-radius:8px;margin-bottom:14px;text-align:center}
+  .auth-msg.err{background:#fdecea;color:var(--danger)}
+  .auth-msg.ok{background:#e9f7ef;color:var(--fazenda)}
+  .config-warn{max-width:560px;margin:52px auto;background:#fff8e6;border:1px solid #f5d78e;border-radius:14px;padding:24px;font-size:14px;line-height:1.6}
+  .config-warn code{background:#fff;border:1px solid var(--border);padding:1px 5px;border-radius:5px}
+  @media(max-width:560px){.chart-wrap{height:260px}h1{font-size:19px}}
+</style>
+</head>
+<body>
+<div id="app"><div class="loading">Carregando…</div></div>
+
+<script>
+const CATS={fazenda:{nome:"Fazenda",cor:"#2e9e5b"},construcao:{nome:"Construção",cor:"#e8871e"},moradia:{nome:"Moradia",cor:"#3a7bd5"}};
+const COR_FAT="#10a5a5";
+const MESES=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+
+let db=null;
+let state={session:null,transactions:[],tab:"resumo",ano:new Date().getFullYear(),mounted:false,channel:null};
+let charts=[];
+
+/* ---------------- Início ---------------- */
+window.addEventListener("DOMContentLoaded",()=>{
+  if(!SUPABASE_URL||SUPABASE_URL.startsWith("COLE_")||!SUPABASE_ANON_KEY||SUPABASE_ANON_KEY.startsWith("COLE_")){
+    showConfigWarning(); return;
+  }
+  db=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+  db.auth.getSession().then(({data})=>{state.session=data.session;route();});
+  db.auth.onAuthStateChange((_e,session)=>{state.session=session;route();});
+});
+
+function route(){
+  if(state.session){ if(!state.mounted) mountApp(); }
+  else { unmountApp(); showLogin(); }
+}
+
+function showConfigWarning(){
+  document.getElementById("app").innerHTML=`
+    <div class="config-warn">
+      <h2 style="margin-top:0">⚙️ Falta configurar o Supabase</h2>
+      Abra o arquivo <code>index.html</code> e, no topo, substitua
+      <code>SUPABASE_URL</code> e <code>SUPABASE_ANON_KEY</code> pelos valores do seu projeto
+      (painel do Supabase → <b>Project Settings → API</b>). Depois recarregue a página.
+      <div class="note" style="margin-top:14px">A chave <b>anon</b> é pública e pode ficar exposta — o acesso ao banco é protegido pelo login e pelas regras (RLS) que você criou com o arquivo <code>supabase-setup.sql</code>.</div>
+      <button class="btn" id="cw-demo" style="margin-top:18px">▶ Ver demonstração com dados de exemplo</button>
+      <div class="note" style="margin-top:8px">Explore todas as telas — lançamentos, gráficos, previsões e o backup em Excel — com dados fictícios, sem configurar nada. Ao sair da demonstração ou recarregar a página, os dados de exemplo somem; nada é enviado a lugar nenhum.</div>
+    </div>`;
+  document.getElementById("cw-demo").onclick=startDemo;
+}
+
+/* ---------------- Demonstração (sem Supabase) ----------------
+   Simula a mesma interface que o app usa do supabase-js (auth, channel, from/select/
+   insert/delete), guardando tudo em memória. Serve só para visualizar o software antes
+   de configurar o banco de verdade — nada aqui é salvo ou enviado a lugar nenhum. */
+function seedDemoData(){
+  return [
+    {id:"seed-1",type:"gasto",category:"fazenda",description:"Ração para gado",amount:4200,date:"2026-01-08"},
+    {id:"seed-2",type:"gasto",category:"fazenda",description:"Vacina aftosa",amount:1150,date:"2026-01-15"},
+    {id:"seed-3",type:"faturamento",category:null,description:"Venda de bezerros",amount:18500,date:"2026-01-22"},
+    {id:"seed-4",type:"gasto",category:"construcao",description:"Cimento e areia",amount:3200,date:"2026-01-10"},
+    {id:"seed-5",type:"gasto",category:"moradia",description:"Conta de luz",amount:420,date:"2026-01-05"},
+    {id:"seed-6",type:"gasto",category:"fazenda",description:"Sal mineral",amount:980,date:"2026-02-04"},
+    {id:"seed-7",type:"gasto",category:"fazenda",description:"Manutenção do trator",amount:2100,date:"2026-02-18"},
+    {id:"seed-8",type:"faturamento",category:null,description:"Venda de garrotes",amount:22000,date:"2026-02-25"},
+    {id:"seed-9",type:"gasto",category:"construcao",description:"Mão de obra — curral novo",amount:5400,date:"2026-02-12"},
+    {id:"seed-10",type:"gasto",category:"moradia",description:"Conta de água",amount:180,date:"2026-02-06"},
+    {id:"seed-11",type:"gasto",category:"fazenda",description:"Ração para gado",amount:4500,date:"2026-03-09"},
+    {id:"seed-12",type:"gasto",category:"fazenda",description:"Compra de novilhas",amount:15600,date:"2026-03-20"},
+    {id:"seed-13",type:"faturamento",category:null,description:"Venda de bezerros",amount:19800,date:"2026-03-27"},
+    {id:"seed-14",type:"gasto",category:"construcao",description:"Telhas e madeira",amount:4100,date:"2026-03-14"},
+    {id:"seed-15",type:"gasto",category:"moradia",description:"Mercado",amount:850,date:"2026-03-08"},
+    {id:"seed-16",type:"gasto",category:"fazenda",description:"Vermífugo",amount:760,date:"2026-04-11"},
+    {id:"seed-17",type:"faturamento",category:null,description:"Venda de garrotes",amount:24500,date:"2026-04-23"},
+    {id:"seed-18",type:"gasto",category:"construcao",description:"Mão de obra — curral novo",amount:5200,date:"2026-04-16"},
+    {id:"seed-19",type:"gasto",category:"moradia",description:"Conta de luz",amount:460,date:"2026-04-05"},
+    {id:"seed-20",type:"gasto",category:"fazenda",description:"Ração para gado",amount:4700,date:"2026-05-07"},
+    {id:"seed-21",type:"faturamento",category:null,description:"Venda de bezerros",amount:21000,date:"2026-05-19"},
+    {id:"seed-22",type:"gasto",category:"construcao",description:"Acabamento",amount:3800,date:"2026-05-22"},
+    {id:"seed-23",type:"gasto",category:"moradia",description:"Manutenção da casa",amount:1200,date:"2026-05-11"},
+    {id:"seed-24",type:"gasto",category:"fazenda",description:"Sal mineral",amount:1020,date:"2026-06-06"},
+    {id:"seed-25",type:"faturamento",category:null,description:"Venda de garrotes",amount:26500,date:"2026-06-18"},
+    {id:"seed-26",type:"gasto",category:"fazenda",description:"Vacina aftosa",amount:1200,date:"2026-06-25"},
+    {id:"seed-27",type:"gasto",category:"moradia",description:"Conta de água",amount:190,date:"2026-06-08"},
+    {id:"seed-28",type:"gasto",category:"fazenda",description:"Ração para gado",amount:4900,date:"2026-07-09"},
+    {id:"seed-29",type:"faturamento",category:null,description:"Venda de bezerros",amount:20500,date:"2026-07-21"},
+    {id:"seed-30",type:"gasto",category:"construcao",description:"Material elétrico",amount:2600,date:"2026-07-14"},
+    {id:"seed-31",type:"gasto",category:"fazenda",description:"Manutenção do trator",amount:1800,date:"2026-08-06"},
+    {id:"seed-32",type:"faturamento",category:null,description:"Venda de garrotes",amount:23000,date:"2026-08-15"},
+    {id:"seed-33",type:"gasto",category:"moradia",description:"Conta de luz",amount:480,date:"2026-08-05"}
+  ];
+}
+function createDemoClient(){
+  let rows=seedDemoData();
+  return{
+    auth:{
+      getSession:async()=>({data:{session:null}}),
+      onAuthStateChange:()=>({data:{subscription:{unsubscribe(){}}}}),
+      signInWithPassword:async()=>({error:null}),
+      signOut:async()=>({error:null})
+    },
+    channel(){return{on(){return this;},subscribe(){return this;}};},
+    removeChannel(){},
+    from(){
+      return{
+        select(){return{order(col,opts){
+          const asc=!!(opts&&opts.ascending);
+          const sorted=rows.slice().sort((a,b)=>asc?String(a[col]).localeCompare(String(b[col])):String(b[col]).localeCompare(String(a[col])));
+          return Promise.resolve({data:sorted,error:null});
+        }};},
+        insert(obj){rows.push(Object.assign({id:"demo-"+Math.random().toString(36).slice(2)},obj));return Promise.resolve({error:null});},
+        delete(){return{eq(col,val){rows=rows.filter(r=>r[col]!==val);return Promise.resolve({error:null});}};}
+      };
+    }
+  };
+}
+function startDemo(){
+  db=createDemoClient();
+  state.demo=true;
+  state.session={user:{email:"demo@fazenda.com.br"}};
+  mountApp();
+}
+function sairDemo(){
+  unmountApp();
+  db=null;
+  state.session=null;
+  state.demo=false;
+  state.transactions=[];
+  showConfigWarning();
+}
+
+/* ---------------- Login ---------------- */
+/* Cadastro público removido por segurança: como a chave anon é pública e o RLS libera
+   leitura/escrita para qualquer usuário autenticado, um cadastro aberto permitiria que
+   qualquer pessoa que encontrasse o link criasse uma conta e acessasse todos os dados.
+   Contas agora só podem ser criadas pelo administrador (painel Supabase → Authentication
+   → Users → Add user), como já era a opção recomendada no README. */
+function showLogin(msg){
+  state.mounted=false;
+  document.getElementById("app").innerHTML=`
+    <div class="auth-wrap">
+      <div class="auth-card">
+        <h1>💰 Controle Financeiro</h1>
+        <p class="sub">Entre com seu e-mail e senha</p>
+        <div id="authMsg"></div>
+        <div class="field"><label>E-mail</label><input type="email" id="au-email" placeholder="voce@email.com"></div>
+        <div class="field"><label>Senha</label><input type="password" id="au-pass" placeholder="••••••••"></div>
+        <button class="btn" id="au-go">Entrar</button>
+        <div class="note" style="text-align:center;margin-top:16px">Não tem conta? Peça para quem administra o sistema criar seu acesso.</div>
+      </div>
+    </div>`;
+  if(msg) setAuthMsg(msg.text,msg.type);
+  const go=async()=>{
+    const email=document.getElementById("au-email").value.trim();
+    const pass=document.getElementById("au-pass").value;
+    if(!email||!pass){setAuthMsg("Preencha e-mail e senha.","err");return;}
+    document.getElementById("au-go").disabled=true;
+    const {error}=await db.auth.signInWithPassword({email,password:pass});
+    document.getElementById("au-go").disabled=false;
+    if(error){setAuthMsg("E-mail ou senha inválidos.","err");return;}
+  };
+  document.getElementById("au-go").onclick=go;
+  document.getElementById("au-pass").onkeydown=e=>{if(e.key==="Enter")go();};
+}
+function setAuthMsg(text,type){document.getElementById("authMsg").innerHTML=`<div class="auth-msg ${type}">${text}</div>`;}
+
+/* ---------------- Montagem do app ---------------- */
+async function mountApp(){
+  state.mounted=true;
+  await loadData();
+  render();
+  // tempo real: recarrega quando alguém insere/edita/exclui
+  try{
+    state.channel=db.channel("tx-"+Math.random().toString(36).slice(2))
+      .on("postgres_changes",{event:"*",schema:"public",table:"transactions"},()=>autoRefresh())
+      .subscribe();
+  }catch(e){/* segue sem realtime */}
+}
+function unmountApp(){
+  if(state.channel){try{db.removeChannel(state.channel);}catch(e){}state.channel=null;}
+  charts.forEach(c=>c.destroy());charts=[];
+  state.mounted=false;
+}
+function autoRefresh(){
+  const a=document.activeElement;
+  const digitando=a&&(a.tagName==="INPUT"||a.tagName==="SELECT");
+  loadData().then(()=>{if(!digitando)render();});
+}
+
+/* ---------------- Dados (Supabase) ---------------- */
+async function loadData(){
+  const {data,error}=await db.from("transactions").select("*").order("date",{ascending:false});
+  if(error){console.error(error);alert("Erro ao carregar dados: "+error.message);state.transactions=[];return;}
+  state.transactions=(data||[]).map(r=>({id:r.id,type:r.type,category:r.category,description:r.description,amount:Number(r.amount),date:r.date}));
+}
+async function addTx(tx){
+  const {error}=await db.from("transactions").insert({type:tx.type,category:tx.category,description:tx.description,amount:tx.amount,date:tx.date});
+  if(error){alert("Erro ao salvar: "+error.message);return false;}
+  return true;
+}
+async function removeTx(id){
+  const {error}=await db.from("transactions").delete().eq("id",id);
+  if(error){alert("Erro ao excluir: "+error.message);return false;}
+  return true;
+}
+
+/* ---------------- Utilitários ---------------- */
+const fmt=v=>Number(v).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
+const anoDe=d=>parseInt(d.slice(0,4),10);
+const mesDe=d=>parseInt(d.slice(5,7),10)-1;
+function anosDisponiveis(){const s=new Set(state.transactions.map(t=>anoDe(t.date)));s.add(new Date().getFullYear());return[...s].sort((a,b)=>a-b);}
+function serieMensal(f,ano){const a=Array(12).fill(0);state.transactions.filter(f).filter(t=>anoDe(t.date)===ano).forEach(t=>{a[mesDe(t.date)]+=t.amount;});return a;}
+function serieAnual(f){const m={};state.transactions.filter(f).forEach(t=>{const a=anoDe(t.date);m[a]=(m[a]||0)+t.amount;});return m;}
+function regressao(p){const n=p.length;if(n<2){const m=n===1?p[0].y:0;return{f:()=>m,slope:0};}let sx=0,sy=0,sxy=0,sxx=0;p.forEach(o=>{sx+=o.x;sy+=o.y;sxy+=o.x*o.y;sxx+=o.x*o.x;});const d=n*sxx-sx*sx;if(d===0){const m=sy/n;return{f:()=>m,slope:0};}const slope=(n*sxy-sx*sy)/d,b=(sy-slope*sx)/n;return{f:x=>Math.max(0,b+slope*x),slope};}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));}
+function rotuloMes(k){return MESES[k%12]+"/"+String(Math.floor(k/12)).slice(2);}
+function dataLocalHoje(){const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
+
+/* ---------------- Render principal ---------------- */
+function render(){
+  charts.forEach(c=>c.destroy());charts=[];
+  const email=state.session?.user?.email||"";
+  const quemTag=state.demo?`🧪 Modo demonstração — dados fictícios, nada é salvo`:`Conectado como <b>${escapeHtml(email)}</b>`;
+  document.getElementById("app").innerHTML=`
+    <div class="topbar">
+      <div class="who">${quemTag}</div>
+      <div class="actions">
+        <button class="btn ghost" id="bt-refresh">↻ Atualizar</button>
+        <button class="btn ghost" id="bt-export">⬇ Backup (Excel)</button>
+        <button class="btn ghost" id="bt-logout">${state.demo?"Sair da demonstração":"Sair"}</button>
+      </div>
+    </div>
+    <h1>💰 Controle Financeiro</h1>
+    <div class="subtitle">${state.demo?"Você está explorando com dados de exemplo — configure o Supabase (veja o README) para usar com dados reais.":"Banco online compartilhado — todos que fazem login acessam os mesmos dados."}</div>
+    <div class="tabs">
+      ${tabBtn("resumo","📊 Resumo")}${tabBtn("fazenda","🌾 Fazenda")}${tabBtn("construcao","🏗️ Construção")}${tabBtn("moradia","🏠 Moradia")}${tabBtn("faturamento","💵 Faturamento")}
+    </div>
+    <div id="content"></div>`;
+  document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>{state.tab=b.dataset.tab;render();});
+  document.getElementById("bt-refresh").onclick=async()=>{await loadData();render();};
+  document.getElementById("bt-export").onclick=exportarExcel;
+  document.getElementById("bt-logout").onclick=async()=>{if(state.demo){sairDemo();}else{await db.auth.signOut();}};
+  const c=document.getElementById("content");
+  if(state.tab==="resumo")renderResumo(c);
+  else if(state.tab==="faturamento")renderLancamentos(c,"faturamento");
+  else renderLancamentos(c,state.tab);
+}
+function tabBtn(id,label){return `<button class="tab ${state.tab===id?"active":""}" data-tab="${id}">${label}</button>`;}
+
+/* ---------------- Lançamentos ---------------- */
+function renderLancamentos(c,tipo){
+  const isFat=tipo==="faturamento";
+  const cor=isFat?COR_FAT:CATS[tipo].cor;
+  const nome=isFat?"Faturamento":CATS[tipo].nome;
+  const filtro=isFat?(t=>t.type==="faturamento"):(t=>t.type==="gasto"&&t.category===tipo);
+  const hoje=dataLocalHoje();
+  c.innerHTML=`
+    <div class="card">
+      <h2>Novo lançamento — ${nome}</h2>
+      <div class="row">
+        <div class="field"><label>Data</label><input type="date" id="f-data" value="${hoje}"></div>
+        <div class="field" style="flex:2"><label>Descrição</label><input type="text" id="f-desc" placeholder="${isFat?"Ex.: Venda de gado":"Ex.: Compra de insumos"}"></div>
+        <div class="field"><label>Valor (R$)</label><input type="number" id="f-valor" step="0.01" min="0" placeholder="0,00"></div>
+        <div class="field" style="flex:0"><label>&nbsp;</label><button class="btn accent-${tipo}" id="f-add">Adicionar</button></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="filterbar"><strong>Lançamentos</strong><select id="flt-ano"></select><select id="flt-mes"></select></div>
+      <div id="lista"></div>
+    </div>`;
+  const selAno=document.getElementById("flt-ano");
+  selAno.innerHTML=`<option value="todos">Todos os anos</option>`+anosDisponiveis().map(a=>`<option value="${a}" ${a===state.ano?"selected":""}>${a}</option>`).join("");
+  const selMes=document.getElementById("flt-mes");
+  selMes.innerHTML=`<option value="todos">Todos os meses</option>`+MESES.map((m,i)=>`<option value="${i}">${m}</option>`).join("");
+  function pinta(){
+    const fa=selAno.value,fm=selMes.value;
+    let it=state.transactions.filter(filtro);
+    if(fa!=="todos")it=it.filter(t=>anoDe(t.date)===+fa);
+    if(fm!=="todos")it=it.filter(t=>mesDe(t.date)===+fm);
+    it.sort((a,b)=>b.date.localeCompare(a.date));
+    const total=it.reduce((s,t)=>s+t.amount,0);
+    const lista=document.getElementById("lista");
+    if(!it.length){lista.innerHTML=`<div class="empty">Nenhum lançamento neste período.</div>`;return;}
+    lista.innerHTML=`<table><thead><tr><th>Data</th><th>Descrição</th><th class="amount">Valor</th><th></th></tr></thead><tbody>
+      ${it.map(t=>`<tr><td>${t.date.split("-").reverse().join("/")}</td><td>${escapeHtml(t.description||"—")}</td><td class="amount">${fmt(t.amount)}</td><td><button class="del" data-id="${t.id}">excluir</button></td></tr>`).join("")}
+      </tbody></table><div class="total-line"><span>Total do período</span><span style="color:${cor}">${fmt(total)}</span></div>`;
+    lista.querySelectorAll(".del").forEach(b=>b.onclick=async()=>{if(!confirm("Excluir este lançamento?"))return;if(await removeTx(b.dataset.id)){await loadData();render();}});
+  }
+  selAno.onchange=pinta;selMes.onchange=pinta;pinta();
+  document.getElementById("f-add").onclick=async()=>{
+    const data=document.getElementById("f-data").value;
+    const desc=document.getElementById("f-desc").value.trim();
+    const valor=parseFloat(document.getElementById("f-valor").value);
+    if(!data||!valor||valor<=0){alert("Preencha data e um valor válido.");return;}
+    const btnAdd=document.getElementById("f-add");
+    btnAdd.disabled=true;
+    const ok=await addTx(isFat?{type:"faturamento",category:null,description:desc,amount:valor,date:data}:{type:"gasto",category:tipo,description:desc,amount:valor,date:data});
+    if(ok){await loadData();render();}
+    else btnAdd.disabled=false;
+  };
+}
+
+/* ---------------- Resumo + previsões ---------------- */
+function renderResumo(c){
+  const anos=anosDisponiveis();
+  c.innerHTML=`
+    <div class="card">
+      <div class="filterbar"><strong>Ano de referência</strong><select id="res-ano">${anos.map(a=>`<option value="${a}" ${a===state.ano?"selected":""}>${a}</option>`).join("")}</select></div>
+      <div class="stat-grid" id="stats"></div>
+    </div>
+    <div class="card"><h2>Gastos × Faturamento — mensal (${state.ano})</h2><div class="chart-wrap"><canvas id="ch-mensal"></canvas></div></div>
+    <div class="card"><h2>Comparativo anual</h2><div class="chart-wrap"><canvas id="ch-anual"></canvas></div></div>
+    <div class="card"><h2>📈 Previsão dos próximos 6 meses</h2><div class="chart-wrap"><canvas id="ch-prev"></canvas></div><div class="note" id="prev-note"></div></div>
+    <div class="card"><h2>🔮 Previsão anual</h2><div id="prev-anual"></div></div>`;
+  document.getElementById("res-ano").onchange=e=>{state.ano=+e.target.value;render();};
+
+  const fG=t=>t.type==="gasto",fF=t=>t.type==="faturamento";
+  const gastoAno=serieMensal(fG,state.ano).reduce((a,b)=>a+b,0);
+  const fatAno=serieMensal(fF,state.ano).reduce((a,b)=>a+b,0);
+  const saldo=fatAno-gastoAno;
+  document.getElementById("stats").innerHTML=`
+    ${stat("Faturamento "+state.ano,fmt(fatAno),"pos")}
+    ${stat("Gastos "+state.ano,fmt(gastoAno),"neg")}
+    ${stat("Saldo "+state.ano,fmt(saldo),saldo>=0?"pos":"neg")}
+    ${stat("Fazenda",fmt(serieMensal(t=>t.type==="gasto"&&t.category==="fazenda",state.ano).reduce((a,b)=>a+b,0)))}
+    ${stat("Construção",fmt(serieMensal(t=>t.type==="gasto"&&t.category==="construcao",state.ano).reduce((a,b)=>a+b,0)))}
+    ${stat("Moradia",fmt(serieMensal(t=>t.type==="gasto"&&t.category==="moradia",state.ano).reduce((a,b)=>a+b,0)))}`;
+
+  const mFaz=serieMensal(t=>t.type==="gasto"&&t.category==="fazenda",state.ano);
+  const mCon=serieMensal(t=>t.type==="gasto"&&t.category==="construcao",state.ano);
+  const mMor=serieMensal(t=>t.type==="gasto"&&t.category==="moradia",state.ano);
+  const mFat=serieMensal(fF,state.ano);
+  charts.push(new Chart(document.getElementById("ch-mensal"),{data:{labels:MESES,datasets:[
+    {type:"bar",label:"Fazenda",data:mFaz,backgroundColor:CATS.fazenda.cor,stack:"g"},
+    {type:"bar",label:"Construção",data:mCon,backgroundColor:CATS.construcao.cor,stack:"g"},
+    {type:"bar",label:"Moradia",data:mMor,backgroundColor:CATS.moradia.cor,stack:"g"},
+    {type:"line",label:"Faturamento",data:mFat,borderColor:COR_FAT,backgroundColor:COR_FAT,borderWidth:3,tension:.25,pointRadius:3}]},options:opts(true)}));
+
+  const gA=serieAnual(fG),fA=serieAnual(fF);
+  const todos=[...new Set([...Object.keys(gA),...Object.keys(fA)])].map(Number).sort((a,b)=>a-b);
+  charts.push(new Chart(document.getElementById("ch-anual"),{type:"bar",data:{labels:todos,datasets:[
+    {label:"Gastos",data:todos.map(a=>gA[a]||0),backgroundColor:"#d0422e"},
+    {label:"Faturamento",data:todos.map(a=>fA[a]||0),backgroundColor:COR_FAT}]},options:opts(false)}));
+
+  previsoes(fG,fF);
+}
+function stat(l,v,cls=""){return `<div class="stat"><div class="label">${l}</div><div class="value ${cls}">${v}</div></div>`;}
+
+function previsoes(fG,fF){
+  const hist=f=>{const m={};state.transactions.filter(f).forEach(t=>{const k=anoDe(t.date)*12+mesDe(t.date);m[k]=(m[k]||0)+t.amount;});return m;};
+  const hG=hist(fG),hF=hist(fF);
+  const chaves=[...new Set([...Object.keys(hG),...Object.keys(hF)])].map(Number).sort((a,b)=>a-b);
+  const noteEl=document.getElementById("prev-note"),anualEl=document.getElementById("prev-anual");
+  if(chaves.length<2){
+    document.getElementById("ch-prev").parentElement.innerHTML=`<div class="empty">Adicione lançamentos em pelo menos 2 meses diferentes para gerar previsões.</div>`;
+    noteEl.innerHTML="";anualEl.innerHTML=`<div class="empty">Dados insuficientes para projeção anual.</div>`;return;
+  }
+  const base=chaves[0];
+  const rG=regressao(chaves.map(k=>({x:k-base,y:hG[k]||0})));
+  const rF=regressao(chaves.map(k=>({x:k-base,y:hF[k]||0})));
+  const ult=chaves[chaves.length-1],ini=Math.max(base,ult-5);
+  const labels=[],histG=[],histF=[],prevG=[],prevF=[];
+  for(let k=ini;k<=ult;k++){labels.push(rotuloMes(k));histG.push(hG[k]||0);histF.push(hF[k]||0);prevG.push(null);prevF.push(null);}
+  for(let i=1;i<=6;i++){const k=ult+i;labels.push(rotuloMes(k));histG.push(null);histF.push(null);prevG.push(Math.round(rG.f(k-base)));prevF.push(Math.round(rF.f(k-base)));}
+  const idx=ult-ini;prevG[idx]=histG[idx];prevF[idx]=histF[idx];
+  charts.push(new Chart(document.getElementById("ch-prev"),{type:"line",data:{labels,datasets:[
+    {label:"Gastos (real)",data:histG,borderColor:"#d0422e",backgroundColor:"#d0422e",borderWidth:3,tension:.2,pointRadius:3},
+    {label:"Gastos (previsto)",data:prevG,borderColor:"#d0422e",borderDash:[6,5],borderWidth:2,tension:.2,pointRadius:2},
+    {label:"Faturamento (real)",data:histF,borderColor:COR_FAT,backgroundColor:COR_FAT,borderWidth:3,tension:.2,pointRadius:3},
+    {label:"Faturamento (previsto)",data:prevF,borderColor:COR_FAT,borderDash:[6,5],borderWidth:2,tension:.2,pointRadius:2}]},options:opts(false)}));
+  let tG=0,tF=0;for(let i=1;i<=6;i++){tG+=rG.f(ult+i-base);tF+=rF.f(ult+i-base);}
+  const tend=v=>v>1?"em alta":v<-1?"em queda":"estável";
+  noteEl.innerHTML=`Projeção dos próximos 6 meses (tendência linear sobre o histórico): gastos <strong>${tend(rG.slope)}</strong>, faturamento <strong>${tend(rF.slope)}</strong>. Total previsto: gastos ${fmt(tG)} · faturamento ${fmt(tF)} · saldo estimado <strong style="color:${tF-tG>=0?CATS.fazenda.cor:'var(--danger)'}">${fmt(tF-tG)}</strong>.<br>São estimativas — quanto mais histórico, mais precisas.`;
+  const anoUlt=Math.floor(ult/12);
+  const linhas=[anoUlt+1,anoUlt+2].map(ano=>{let pg=0,pf=0;for(let m=0;m<12;m++){const k=ano*12+m;pg+=rG.f(k-base);pf+=rF.f(k-base);}return{ano,pg,pf};});
+  anualEl.innerHTML=`<table><thead><tr><th>Ano</th><th class="amount">Gastos previstos</th><th class="amount">Faturamento previsto</th><th class="amount">Saldo estimado</th></tr></thead><tbody>
+    ${linhas.map(l=>`<tr><td><strong>${l.ano}</strong></td><td class="amount">${fmt(l.pg)}</td><td class="amount">${fmt(l.pf)}</td><td class="amount" style="color:${l.pf-l.pg>=0?CATS.fazenda.cor:'var(--danger)'};font-weight:700">${fmt(l.pf-l.pg)}</td></tr>`).join("")}
+    </tbody></table><div class="note">Projeção da tendência mensal aplicada a 12 meses de cada ano.</div>`;
+}
+
+function opts(stacked){return{responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},
+  scales:{x:{stacked,grid:{display:false}},y:{stacked,beginAtZero:true,ticks:{callback:v=>"R$ "+v.toLocaleString("pt-BR")}}},
+  plugins:{legend:{position:"bottom",labels:{boxWidth:12,font:{size:11}}},tooltip:{callbacks:{label:ctx=>ctx.dataset.label+": "+fmt(ctx.parsed.y||0)}}}};}
+
+/* ---------------- Backup em Excel ----------------
+   Exporta TODOS os lançamentos (não só os do filtro/aba atual) em duas abas: a lista
+   completa e um resumo por ano/categoria. Serve como cópia de segurança, já que o plano
+   gratuito do Supabase não faz backup automático (ver README). */
+function exportarExcel(){
+  if(!state.transactions.length){alert("Não há lançamentos para exportar.");return;}
+  const rows=state.transactions.slice().sort((a,b)=>a.date.localeCompare(b.date)).map(t=>({
+    Data:t.date.split("-").reverse().join("/"),
+    Tipo:t.type==="faturamento"?"Faturamento":"Gasto",
+    Categoria:t.category?CATS[t.category].nome:"—",
+    Descrição:t.description||"",
+    "Valor (R$)":t.amount
+  }));
+  const anos=anosDisponiveis().filter(a=>state.transactions.some(t=>anoDe(t.date)===a));
+  const resumo=anos.map(ano=>{
+    const gFaz=serieMensal(t=>t.type==="gasto"&&t.category==="fazenda",ano).reduce((a,b)=>a+b,0);
+    const gCon=serieMensal(t=>t.type==="gasto"&&t.category==="construcao",ano).reduce((a,b)=>a+b,0);
+    const gMor=serieMensal(t=>t.type==="gasto"&&t.category==="moradia",ano).reduce((a,b)=>a+b,0);
+    const fat=serieMensal(t=>t.type==="faturamento",ano).reduce((a,b)=>a+b,0);
+    const totalGastos=gFaz+gCon+gMor;
+    return{Ano:ano,"Gastos Fazenda":gFaz,"Gastos Construção":gCon,"Gastos Moradia":gMor,"Total Gastos":totalGastos,"Faturamento":fat,"Saldo":fat-totalGastos};
+  });
+  const ws=XLSX.utils.json_to_sheet(rows);
+  ws["!cols"]=[{wch:12},{wch:14},{wch:14},{wch:34},{wch:14}];
+  const wsResumo=XLSX.utils.json_to_sheet(resumo);
+  wsResumo["!cols"]=[{wch:8},{wch:16},{wch:18},{wch:16},{wch:14},{wch:14},{wch:14}];
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,"Lançamentos");
+  XLSX.utils.book_append_sheet(wb,wsResumo,"Resumo por ano");
+  XLSX.writeFile(wb,"controle-financeiro-backup-"+dataLocalHoje()+".xlsx");
+}
+</script>
+</body>
+</html>
