@@ -37,14 +37,33 @@ informe e-mail e senha e entregue essas credenciais a ela.
 > e confiável, também dá pra desligar **"Confirm email"**, já que quem cria a conta é você.
 
 ### 4. Publicar no GitHub Pages
-1. Crie um repositório no seu GitHub e envie os arquivos `index.html` e `README.md`
-   (o `supabase-setup.sql` já cumpriu a função; pode manter no repo como referência).
+1. Crie um repositório no seu GitHub e envie **todos** os arquivos desta pasta: `index.html`,
+   `manifest.json`, `sw.js`, `icon-192.png`, `icon-512.png`, `icon-maskable-512.png`,
+   `apple-touch-icon.png` e `README.md` (o `supabase-setup.sql` já cumpriu a função; pode
+   manter no repo como referência). Os arquivos de ícone/manifest são o que permite
+   "instalar" o app — sem eles o site funciona normalmente, só não aparece a opção de instalar.
 2. No repositório: **Settings → Pages**.
 3. Em **Source**, escolha **Deploy from a branch**, selecione a branch `main` e a pasta `/ (root)`.
 4. Salve. Em ~1 min o GitHub mostra o endereço público (algo como
    `https://SEU-USUARIO.github.io/NOME-DO-REPO/`). Esse é o link que você compartilha.
 
 Pronto: qualquer pessoa com uma conta acessa o link, faz login e vê/edita o mesmo banco.
+
+### 5. Instalar como aplicativo (celular e computador)
+Depois de publicado no GitHub Pages, o site pode ser "instalado" e passa a abrir com ícone
+próprio, em janela cheia, sem barra de endereço — igual ao software de controle de rebanho.
+
+- **Android (Chrome)**: abra o link do app, toque no menu (⋮) no canto superior direito e
+  escolha **"Instalar aplicativo"** (ou **"Adicionar à tela inicial"**).
+- **iPhone/iPad (Safari)**: abra o link, toque no ícone de compartilhar (□↑) e escolha
+  **"Adicionar à Tela de Início"**.
+- **Computador (Chrome ou Edge)**: abra o link; um ícone de instalação (⊕ ou um monitor com
+  seta) aparece do lado direito da barra de endereço — clique nele e depois em **Instalar**.
+  Também dá pra achar em **⋮ → Instalar Controle Financeiro…**.
+
+Cada pessoa da equipe instala no próprio celular/computador com a própria conta — o app
+instalado continua sendo o mesmo site, só com atalho e visual de aplicativo; os dados
+continuam os mesmos para todo mundo.
 
 ## Observações importantes
 

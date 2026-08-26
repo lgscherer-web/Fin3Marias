@@ -5,6 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Controle Financeiro</title>
 
+<!-- App instalável (PWA): permite "instalar" o app no celular e no computador, com ícone
+     próprio, sem barra de endereço — igual ao software de controle de rebanho. -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2d3e50">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Financeiro">
+<meta name="mobile-web-app-capable" content="yes">
+
 <!-- ============================================================
      CONFIGURAÇÃO — cole aqui os dois valores do seu projeto Supabase
      (painel do Supabase > Project Settings > Data API / API Keys)
@@ -164,6 +175,10 @@ window.addEventListener("DOMContentLoaded",()=>{
   db.auth.getSession().then(({data})=>{state.session=data.session;route();});
   db.auth.onAuthStateChange((_e,session)=>{state.session=session;route();});
 });
+// registra o service worker (necessário para o navegador oferecer "instalar" o app)
+if("serviceWorker" in navigator){
+  window.addEventListener("load",()=>{navigator.serviceWorker.register("sw.js").catch(()=>{});});
+}
 
 function route(){
   if(state.session){ if(!state.mounted) mountApp(); }
