@@ -1,0 +1,28 @@
+name: Manter Supabase ativo
+
+# O plano gratuito do Supabase pausa o projeto após ~7 dias sem nenhuma requisição à API.
+# Esta rotina faz uma consulta bem pequena ao banco a cada 3 dias (margem segura), o que
+# conta como atividade e evita a pausa. Não precisa de nenhuma configuração de senha/segredo:
+# a URL e a chave "anon" já são públicas por natureza (as mesmas usadas no index.html).
+
+on:
+  schedule:
+    - cron: "0 12 */3 * *"   # a cada 3 dias, 12:00 UTC (09:00 no horário de Brasília)
+  workflow_dispatch:          # permite rodar manualmente pela aba "Actions" para testar
+
+jobs:
+  ping-supabase:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Consulta leve à tabela transactions
+        run: |
+          codigo=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://wxdrkekfeupldmxfduzt.supabase.co/rest/v1/transactions?select=id&limit=1" \
+            -H "apikey: sb_publishable_FXE_VnoZFIZebUUS6GKzeA_6d5Ryoud")
+          echo "Resposta do Supabase: HTTP $codigo"
+          # 200/206 = ok; 401/403 é esperado (RLS bloqueia leitura sem login) e ainda assim
+          # conta como atividade, pois a consulta chega até o banco. Só falha em erro de rede.
+          if [ "$codigo" -ge 500 ] || [ "$codigo" -eq 000 ]; then
+            echo "Aviso: resposta inesperada do Supabase."
+            exit 1
+          fi
