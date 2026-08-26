@@ -10,8 +10,8 @@
      (painel do Supabase > Project Settings > Data API / API Keys)
      ============================================================ -->
 <script>
-  const SUPABASE_URL      = "https://wxdrkekfeupldmxfduzt.supabase.co";   // ex.: https://abcdefgh.supabase.co
-  const SUPABASE_ANON_KEY = "sb_publishable_FXE_VnoZFIZebUUS6GKzeA_6d5Ryoud";        // a chave "anon" / "publishable" (pública, pode expor)
+  const SUPABASE_URL      = "https://wxdrkekfeupldmxfduzt.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_FXE_VnoZFIZebUUS6GKzeA_6d5Ryoud";
 </script>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -65,6 +65,13 @@
   th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.3px}
   td.amount,th.amount{text-align:right;font-variant-numeric:tabular-nums}
   .del{color:var(--danger);cursor:pointer;background:none;border:none;font-size:13px}
+  .row-actions{white-space:nowrap}
+  .rowbtn{cursor:pointer;background:none;border:none;font-size:13px;font-weight:600;margin-right:10px;padding:0}
+  .rowbtn.edit{color:var(--moradia)}
+  .rowbtn.save{color:var(--fazenda)}
+  .rowbtn.cancel{color:var(--muted)}
+  tr.editing td{padding-top:6px;padding-bottom:6px}
+  tr.editing input{width:100%;padding:6px 8px;font-size:13px}
   .empty{color:var(--muted);text-align:center;padding:24px;font-size:14px}
   .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
   .stat{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;box-shadow:var(--shadow)}
@@ -101,6 +108,48 @@
 const CATS={fazenda:{nome:"Fazenda",cor:"#2e9e5b"},construcao:{nome:"Construção",cor:"#e8871e"},moradia:{nome:"Moradia",cor:"#3a7bd5"}};
 const COR_FAT="#10a5a5";
 const MESES=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+
+/* Tipos (itens) predefinidos por categoria — ponto de partida; o usuário pode cadastrar
+   novos tipos direto no formulário, e eles passam a aparecer na lista dali em diante
+   (vem do que já foi usado nos lançamentos, sem precisar de tabela extra no banco). */
+const SUBTIPOS={
+  fazenda:["Ração e suplementação","Sal mineral","Vacinas e medicamentos","Compra de animais","Frete de animais","Manutenção de máquinas e trator","Combustível","Mão de obra","Insumos e sementes","Cercas e curral","Outros"],
+  construcao:["Material de construção","Mão de obra","Projeto e engenharia","Elétrica","Hidráulica","Acabamento","Aluguel de equipamento","Outros"],
+  moradia:["Mercado","Água","Luz","Internet/telefone","Manutenção da casa","Saúde","Educação","Outros"],
+  faturamento:["Venda de bezerros","Venda de garrotes","Venda de vacas de descarte","Venda de touros","Arrendamento de pasto","Prestação de serviço","Outros"]
+};
+const NOVO_TIPO="__novo__";
+function listaSubtipos(tipoChave){
+  const preset=(SUBTIPOS[tipoChave]||[]).filter(x=>x!=="Outros");
+  const usados=new Set();
+  state.transactions.forEach(t=>{
+    const pertence=tipoChave==="faturamento"?t.type==="faturamento":(t.type==="gasto"&&t.category===tipoChave);
+    if(pertence&&t.subtipo)usados.add(t.subtipo);
+  });
+  const extras=[...usados].filter(u=>!preset.includes(u)).sort((a,b)=>a.localeCompare(b,"pt-BR"));
+  return[...preset,...extras,"Outros"];
+}
+function optsSubtipoHTML(tipoChave,valorAtual){
+  const opts=listaSubtipos(tipoChave);
+  return opts.map(o=>`<option value="${escapeHtml(o)}" ${o===valorAtual?"selected":""}>${escapeHtml(o)}</option>`).join("")
+    +`<option value="${NOVO_TIPO}">+ Cadastrar novo tipo…</option>`;
+}
+function wireSeletorTipo(selectEl,tipoChave){
+  selectEl.onchange=()=>{
+    if(selectEl.value!==NOVO_TIPO)return;
+    const novo=prompt("Nome do novo tipo:");
+    if(novo&&novo.trim()){
+      const nome=novo.trim();
+      const opt=document.createElement("option");
+      opt.value=nome;opt.textContent=nome;
+      selectEl.insertBefore(opt,selectEl.lastElementChild);
+      selectEl.value=nome;
+    }else{
+      const opts=listaSubtipos(tipoChave);
+      selectEl.value=opts[0]||"Outros";
+    }
+  };
+}
 
 let db=null;
 let state={session:null,transactions:[],tab:"resumo",ano:new Date().getFullYear(),mounted:false,channel:null};
@@ -141,39 +190,39 @@ function showConfigWarning(){
    de configurar o banco de verdade — nada aqui é salvo ou enviado a lugar nenhum. */
 function seedDemoData(){
   return [
-    {id:"seed-1",type:"gasto",category:"fazenda",description:"Ração para gado",amount:4200,date:"2026-01-08"},
-    {id:"seed-2",type:"gasto",category:"fazenda",description:"Vacina aftosa",amount:1150,date:"2026-01-15"},
-    {id:"seed-3",type:"faturamento",category:null,description:"Venda de bezerros",amount:18500,date:"2026-01-22"},
-    {id:"seed-4",type:"gasto",category:"construcao",description:"Cimento e areia",amount:3200,date:"2026-01-10"},
-    {id:"seed-5",type:"gasto",category:"moradia",description:"Conta de luz",amount:420,date:"2026-01-05"},
-    {id:"seed-6",type:"gasto",category:"fazenda",description:"Sal mineral",amount:980,date:"2026-02-04"},
-    {id:"seed-7",type:"gasto",category:"fazenda",description:"Manutenção do trator",amount:2100,date:"2026-02-18"},
-    {id:"seed-8",type:"faturamento",category:null,description:"Venda de garrotes",amount:22000,date:"2026-02-25"},
-    {id:"seed-9",type:"gasto",category:"construcao",description:"Mão de obra — curral novo",amount:5400,date:"2026-02-12"},
-    {id:"seed-10",type:"gasto",category:"moradia",description:"Conta de água",amount:180,date:"2026-02-06"},
-    {id:"seed-11",type:"gasto",category:"fazenda",description:"Ração para gado",amount:4500,date:"2026-03-09"},
-    {id:"seed-12",type:"gasto",category:"fazenda",description:"Compra de novilhas",amount:15600,date:"2026-03-20"},
-    {id:"seed-13",type:"faturamento",category:null,description:"Venda de bezerros",amount:19800,date:"2026-03-27"},
-    {id:"seed-14",type:"gasto",category:"construcao",description:"Telhas e madeira",amount:4100,date:"2026-03-14"},
-    {id:"seed-15",type:"gasto",category:"moradia",description:"Mercado",amount:850,date:"2026-03-08"},
-    {id:"seed-16",type:"gasto",category:"fazenda",description:"Vermífugo",amount:760,date:"2026-04-11"},
-    {id:"seed-17",type:"faturamento",category:null,description:"Venda de garrotes",amount:24500,date:"2026-04-23"},
-    {id:"seed-18",type:"gasto",category:"construcao",description:"Mão de obra — curral novo",amount:5200,date:"2026-04-16"},
-    {id:"seed-19",type:"gasto",category:"moradia",description:"Conta de luz",amount:460,date:"2026-04-05"},
-    {id:"seed-20",type:"gasto",category:"fazenda",description:"Ração para gado",amount:4700,date:"2026-05-07"},
-    {id:"seed-21",type:"faturamento",category:null,description:"Venda de bezerros",amount:21000,date:"2026-05-19"},
-    {id:"seed-22",type:"gasto",category:"construcao",description:"Acabamento",amount:3800,date:"2026-05-22"},
-    {id:"seed-23",type:"gasto",category:"moradia",description:"Manutenção da casa",amount:1200,date:"2026-05-11"},
-    {id:"seed-24",type:"gasto",category:"fazenda",description:"Sal mineral",amount:1020,date:"2026-06-06"},
-    {id:"seed-25",type:"faturamento",category:null,description:"Venda de garrotes",amount:26500,date:"2026-06-18"},
-    {id:"seed-26",type:"gasto",category:"fazenda",description:"Vacina aftosa",amount:1200,date:"2026-06-25"},
-    {id:"seed-27",type:"gasto",category:"moradia",description:"Conta de água",amount:190,date:"2026-06-08"},
-    {id:"seed-28",type:"gasto",category:"fazenda",description:"Ração para gado",amount:4900,date:"2026-07-09"},
-    {id:"seed-29",type:"faturamento",category:null,description:"Venda de bezerros",amount:20500,date:"2026-07-21"},
-    {id:"seed-30",type:"gasto",category:"construcao",description:"Material elétrico",amount:2600,date:"2026-07-14"},
-    {id:"seed-31",type:"gasto",category:"fazenda",description:"Manutenção do trator",amount:1800,date:"2026-08-06"},
-    {id:"seed-32",type:"faturamento",category:null,description:"Venda de garrotes",amount:23000,date:"2026-08-15"},
-    {id:"seed-33",type:"gasto",category:"moradia",description:"Conta de luz",amount:480,date:"2026-08-05"}
+    {id:"seed-1",type:"gasto",category:"fazenda",subtipo:"Ração e suplementação",description:"Ração para gado",amount:4200,date:"2026-01-08"},
+    {id:"seed-2",type:"gasto",category:"fazenda",subtipo:"Vacinas e medicamentos",description:"Vacina aftosa",amount:1150,date:"2026-01-15"},
+    {id:"seed-3",type:"faturamento",category:null,subtipo:"Venda de bezerros",description:"Venda de bezerros",amount:18500,date:"2026-01-22"},
+    {id:"seed-4",type:"gasto",category:"construcao",subtipo:"Material de construção",description:"Cimento e areia",amount:3200,date:"2026-01-10"},
+    {id:"seed-5",type:"gasto",category:"moradia",subtipo:"Luz",description:"Conta de luz",amount:420,date:"2026-01-05"},
+    {id:"seed-6",type:"gasto",category:"fazenda",subtipo:"Sal mineral",description:"Sal mineral",amount:980,date:"2026-02-04"},
+    {id:"seed-7",type:"gasto",category:"fazenda",subtipo:"Manutenção de máquinas e trator",description:"Manutenção do trator",amount:2100,date:"2026-02-18"},
+    {id:"seed-8",type:"faturamento",category:null,subtipo:"Venda de garrotes",description:"Venda de garrotes",amount:22000,date:"2026-02-25"},
+    {id:"seed-9",type:"gasto",category:"construcao",subtipo:"Mão de obra",description:"Mão de obra — curral novo",amount:5400,date:"2026-02-12"},
+    {id:"seed-10",type:"gasto",category:"moradia",subtipo:"Água",description:"Conta de água",amount:180,date:"2026-02-06"},
+    {id:"seed-11",type:"gasto",category:"fazenda",subtipo:"Ração e suplementação",description:"Ração para gado",amount:4500,date:"2026-03-09"},
+    {id:"seed-12",type:"gasto",category:"fazenda",subtipo:"Compra de animais",description:"Compra de novilhas",amount:15600,date:"2026-03-20"},
+    {id:"seed-13",type:"faturamento",category:null,subtipo:"Venda de bezerros",description:"Venda de bezerros",amount:19800,date:"2026-03-27"},
+    {id:"seed-14",type:"gasto",category:"construcao",subtipo:"Material de construção",description:"Telhas e madeira",amount:4100,date:"2026-03-14"},
+    {id:"seed-15",type:"gasto",category:"moradia",subtipo:"Mercado",description:"Mercado",amount:850,date:"2026-03-08"},
+    {id:"seed-16",type:"gasto",category:"fazenda",subtipo:"Vacinas e medicamentos",description:"Vermífugo",amount:760,date:"2026-04-11"},
+    {id:"seed-17",type:"faturamento",category:null,subtipo:"Venda de garrotes",description:"Venda de garrotes",amount:24500,date:"2026-04-23"},
+    {id:"seed-18",type:"gasto",category:"construcao",subtipo:"Mão de obra",description:"Mão de obra — curral novo",amount:5200,date:"2026-04-16"},
+    {id:"seed-19",type:"gasto",category:"moradia",subtipo:"Luz",description:"Conta de luz",amount:460,date:"2026-04-05"},
+    {id:"seed-20",type:"gasto",category:"fazenda",subtipo:"Ração e suplementação",description:"Ração para gado",amount:4700,date:"2026-05-07"},
+    {id:"seed-21",type:"faturamento",category:null,subtipo:"Venda de bezerros",description:"Venda de bezerros",amount:21000,date:"2026-05-19"},
+    {id:"seed-22",type:"gasto",category:"construcao",subtipo:"Acabamento",description:"Acabamento",amount:3800,date:"2026-05-22"},
+    {id:"seed-23",type:"gasto",category:"moradia",subtipo:"Manutenção da casa",description:"Manutenção da casa",amount:1200,date:"2026-05-11"},
+    {id:"seed-24",type:"gasto",category:"fazenda",subtipo:"Sal mineral",description:"Sal mineral",amount:1020,date:"2026-06-06"},
+    {id:"seed-25",type:"faturamento",category:null,subtipo:"Venda de garrotes",description:"Venda de garrotes",amount:26500,date:"2026-06-18"},
+    {id:"seed-26",type:"gasto",category:"fazenda",subtipo:"Vacinas e medicamentos",description:"Vacina aftosa",amount:1200,date:"2026-06-25"},
+    {id:"seed-27",type:"gasto",category:"moradia",subtipo:"Água",description:"Conta de água",amount:190,date:"2026-06-08"},
+    {id:"seed-28",type:"gasto",category:"fazenda",subtipo:"Ração e suplementação",description:"Ração para gado",amount:4900,date:"2026-07-09"},
+    {id:"seed-29",type:"faturamento",category:null,subtipo:"Venda de bezerros",description:"Venda de bezerros",amount:20500,date:"2026-07-21"},
+    {id:"seed-30",type:"gasto",category:"construcao",subtipo:"Elétrica",description:"Material elétrico",amount:2600,date:"2026-07-14"},
+    {id:"seed-31",type:"gasto",category:"fazenda",subtipo:"Manutenção de máquinas e trator",description:"Manutenção do trator",amount:1800,date:"2026-08-06"},
+    {id:"seed-32",type:"faturamento",category:null,subtipo:"Venda de garrotes",description:"Venda de garrotes",amount:23000,date:"2026-08-15"},
+    {id:"seed-33",type:"gasto",category:"moradia",subtipo:"Luz",description:"Conta de luz",amount:480,date:"2026-08-05"}
   ];
 }
 function createDemoClient(){
@@ -195,6 +244,7 @@ function createDemoClient(){
           return Promise.resolve({data:sorted,error:null});
         }};},
         insert(obj){rows.push(Object.assign({id:"demo-"+Math.random().toString(36).slice(2)},obj));return Promise.resolve({error:null});},
+        update(patch){return{eq(col,val){const row=rows.find(r=>r[col]===val);if(row)Object.assign(row,patch);return Promise.resolve({error:null});}};},
         delete(){return{eq(col,val){rows=rows.filter(r=>r[col]!==val);return Promise.resolve({error:null});}};}
       };
     }
@@ -290,11 +340,16 @@ function autoRefresh(){
 async function loadData(){
   const {data,error}=await db.from("transactions").select("*").order("date",{ascending:false});
   if(error){console.error(error);alert("Erro ao carregar dados: "+error.message);state.transactions=[];return;}
-  state.transactions=(data||[]).map(r=>({id:r.id,type:r.type,category:r.category,description:r.description,amount:Number(r.amount),date:r.date}));
+  state.transactions=(data||[]).map(r=>({id:r.id,type:r.type,category:r.category,subtipo:r.subtipo,description:r.description,amount:Number(r.amount),date:r.date}));
 }
 async function addTx(tx){
-  const {error}=await db.from("transactions").insert({type:tx.type,category:tx.category,description:tx.description,amount:tx.amount,date:tx.date});
+  const {error}=await db.from("transactions").insert({type:tx.type,category:tx.category,subtipo:tx.subtipo,description:tx.description,amount:tx.amount,date:tx.date});
   if(error){alert("Erro ao salvar: "+error.message);return false;}
+  return true;
+}
+async function updateTx(id,patch){
+  const {error}=await db.from("transactions").update(patch).eq("id",id);
+  if(error){alert("Erro ao atualizar: "+error.message);return false;}
   return true;
 }
 async function removeTx(id){
@@ -358,6 +413,7 @@ function renderLancamentos(c,tipo){
       <h2>Novo lançamento — ${nome}</h2>
       <div class="row">
         <div class="field"><label>Data</label><input type="date" id="f-data" value="${hoje}"></div>
+        <div class="field"><label>Tipo</label><select id="f-tipo">${optsSubtipoHTML(tipo,"")}</select></div>
         <div class="field" style="flex:2"><label>Descrição</label><input type="text" id="f-desc" placeholder="${isFat?"Ex.: Venda de gado":"Ex.: Compra de insumos"}"></div>
         <div class="field"><label>Valor (R$)</label><input type="number" id="f-valor" step="0.01" min="0" placeholder="0,00"></div>
         <div class="field" style="flex:0"><label>&nbsp;</label><button class="btn accent-${tipo}" id="f-add">Adicionar</button></div>
@@ -367,10 +423,24 @@ function renderLancamentos(c,tipo){
       <div class="filterbar"><strong>Lançamentos</strong><select id="flt-ano"></select><select id="flt-mes"></select></div>
       <div id="lista"></div>
     </div>`;
+  wireSeletorTipo(document.getElementById("f-tipo"),tipo);
   const selAno=document.getElementById("flt-ano");
   selAno.innerHTML=`<option value="todos">Todos os anos</option>`+anosDisponiveis().map(a=>`<option value="${a}" ${a===state.ano?"selected":""}>${a}</option>`).join("");
   const selMes=document.getElementById("flt-mes");
   selMes.innerHTML=`<option value="todos">Todos os meses</option>`+MESES.map((m,i)=>`<option value="${i}">${m}</option>`).join("");
+  let editandoId=null;
+  function linhaNormal(t){
+    return `<tr><td>${t.date.split("-").reverse().join("/")}</td><td>${escapeHtml(t.subtipo||"—")}</td><td>${escapeHtml(t.description||"—")}</td><td class="amount">${fmt(t.amount)}</td><td class="row-actions"><button class="rowbtn edit" data-id="${t.id}">editar</button><button class="del" data-id="${t.id}">excluir</button></td></tr>`;
+  }
+  function linhaEdicao(t){
+    return `<tr class="editing">
+      <td><input type="date" class="ed-data" value="${t.date}"></td>
+      <td><select class="ed-tipo">${optsSubtipoHTML(tipo,t.subtipo||"")}</select></td>
+      <td><input type="text" class="ed-desc" value="${escapeHtml(t.description||"")}"></td>
+      <td class="amount"><input type="number" class="ed-valor" step="0.01" min="0" value="${t.amount}" style="text-align:right"></td>
+      <td class="row-actions"><button class="rowbtn save" data-id="${t.id}">salvar</button><button class="rowbtn cancel" data-id="${t.id}">cancelar</button></td>
+    </tr>`;
+  }
   function pinta(){
     const fa=selAno.value,fm=selMes.value;
     let it=state.transactions.filter(filtro);
@@ -380,20 +450,39 @@ function renderLancamentos(c,tipo){
     const total=it.reduce((s,t)=>s+t.amount,0);
     const lista=document.getElementById("lista");
     if(!it.length){lista.innerHTML=`<div class="empty">Nenhum lançamento neste período.</div>`;return;}
-    lista.innerHTML=`<table><thead><tr><th>Data</th><th>Descrição</th><th class="amount">Valor</th><th></th></tr></thead><tbody>
-      ${it.map(t=>`<tr><td>${t.date.split("-").reverse().join("/")}</td><td>${escapeHtml(t.description||"—")}</td><td class="amount">${fmt(t.amount)}</td><td><button class="del" data-id="${t.id}">excluir</button></td></tr>`).join("")}
+    lista.innerHTML=`<table><thead><tr><th>Data</th><th>Tipo</th><th>Descrição</th><th class="amount">Valor</th><th></th></tr></thead><tbody>
+      ${it.map(t=>t.id===editandoId?linhaEdicao(t):linhaNormal(t)).join("")}
       </tbody></table><div class="total-line"><span>Total do período</span><span style="color:${cor}">${fmt(total)}</span></div>`;
+    const edTipo=lista.querySelector(".ed-tipo");
+    if(edTipo)wireSeletorTipo(edTipo,tipo);
+    lista.querySelectorAll(".edit").forEach(b=>b.onclick=()=>{editandoId=b.dataset.id;pinta();});
+    lista.querySelectorAll(".cancel").forEach(b=>b.onclick=()=>{editandoId=null;pinta();});
+    lista.querySelectorAll(".save").forEach(b=>b.onclick=async()=>{
+      const tr=b.closest("tr");
+      const novaData=tr.querySelector(".ed-data").value;
+      const novoTipo=tr.querySelector(".ed-tipo").value;
+      const novaDesc=tr.querySelector(".ed-desc").value.trim();
+      const novoValor=parseFloat(tr.querySelector(".ed-valor").value);
+      if(!novaData||!novoValor||novoValor<=0){alert("Preencha data e um valor válido.");return;}
+      if(novoTipo===NOVO_TIPO){alert("Escolha ou cadastre um tipo válido.");return;}
+      tr.querySelectorAll("button").forEach(x=>x.disabled=true);
+      const ok=await updateTx(b.dataset.id,{date:novaData,subtipo:novoTipo,description:novaDesc,amount:novoValor});
+      if(ok){editandoId=null;await loadData();render();}
+      else tr.querySelectorAll("button").forEach(x=>x.disabled=false);
+    });
     lista.querySelectorAll(".del").forEach(b=>b.onclick=async()=>{if(!confirm("Excluir este lançamento?"))return;if(await removeTx(b.dataset.id)){await loadData();render();}});
   }
   selAno.onchange=pinta;selMes.onchange=pinta;pinta();
   document.getElementById("f-add").onclick=async()=>{
     const data=document.getElementById("f-data").value;
+    const subtipo=document.getElementById("f-tipo").value;
     const desc=document.getElementById("f-desc").value.trim();
     const valor=parseFloat(document.getElementById("f-valor").value);
     if(!data||!valor||valor<=0){alert("Preencha data e um valor válido.");return;}
+    if(subtipo===NOVO_TIPO){alert("Escolha ou cadastre um tipo válido.");return;}
     const btnAdd=document.getElementById("f-add");
     btnAdd.disabled=true;
-    const ok=await addTx(isFat?{type:"faturamento",category:null,description:desc,amount:valor,date:data}:{type:"gasto",category:tipo,description:desc,amount:valor,date:data});
+    const ok=await addTx(isFat?{type:"faturamento",category:null,subtipo,description:desc,amount:valor,date:data}:{type:"gasto",category:tipo,subtipo,description:desc,amount:valor,date:data});
     if(ok){await loadData();render();}
     else btnAdd.disabled=false;
   };
@@ -491,6 +580,7 @@ function exportarExcel(){
     Data:t.date.split("-").reverse().join("/"),
     Tipo:t.type==="faturamento"?"Faturamento":"Gasto",
     Categoria:t.category?CATS[t.category].nome:"—",
+    Item:t.subtipo||"—",
     Descrição:t.description||"",
     "Valor (R$)":t.amount
   }));
@@ -504,7 +594,7 @@ function exportarExcel(){
     return{Ano:ano,"Gastos Fazenda":gFaz,"Gastos Construção":gCon,"Gastos Moradia":gMor,"Total Gastos":totalGastos,"Faturamento":fat,"Saldo":fat-totalGastos};
   });
   const ws=XLSX.utils.json_to_sheet(rows);
-  ws["!cols"]=[{wch:12},{wch:14},{wch:14},{wch:34},{wch:14}];
+  ws["!cols"]=[{wch:12},{wch:14},{wch:14},{wch:24},{wch:34},{wch:14}];
   const wsResumo=XLSX.utils.json_to_sheet(resumo);
   wsResumo["!cols"]=[{wch:8},{wch:16},{wch:18},{wch:16},{wch:14},{wch:14},{wch:14}];
   const wb=XLSX.utils.book_new();

@@ -51,11 +51,16 @@ Pronto: qualquer pessoa com uma conta acessa o link, faz login e vê/edita o mes
 - **Banco compartilhado**: todos que fazem login enxergam e editam os mesmos lançamentos
   (modelo de livro-caixa da equipe). Não há dado privado por usuário.
 - **Backup**: o plano gratuito do Supabase não faz backup automático. Use o botão
-  **⬇ Exportar Excel** dentro do app de tempos em tempos para guardar uma cópia.
+  **⬇ Backup (Excel)** dentro do app de tempos em tempos para guardar uma cópia.
 - **Pausa por inatividade**: projetos gratuitos do Supabase pausam após ~7 dias sem nenhum
   acesso; basta reabrir o painel do Supabase e reativar. Uso frequente evita isso.
 - **Tempo real**: quando uma pessoa lança algo, as demais que estão com o app aberto veem a
   atualização automaticamente.
+- **Tipo (item)**: cada lançamento tem um campo "Tipo" (ex.: "Ração e suplementação", "Venda
+  de bezerros") além da categoria. Já vem com uma lista pronta por aba; escolhendo
+  "+ Cadastrar novo tipo…" no formulário, dá pra criar outros na hora — ficam disponíveis
+  para todo mundo a partir do próximo lançamento.
 - **Atualizando de uma versão anterior**: se você já tinha rodado o `supabase-setup.sql` antes
-  e só substituiu esse arquivo agora, abra o SQL Editor e rode o bloco comentado na seção 1b
-  (a trava de categoria) — o restante do script pode rodar de novo sem problema.
+  e só substituiu esse arquivo agora, abra o SQL Editor e rode os blocos comentados das seções
+  1b (trava de categoria) e 1c (coluna do campo "Tipo") — o restante do script pode rodar de
+  novo sem problema.
